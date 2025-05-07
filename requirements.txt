@@ -2,3 +2,9 @@ aiohttp
 pandas
 numpy
 requests
+google-genai
+pillow
+chromadb
+python-dotenv
+open-clip-torch
+natsort
