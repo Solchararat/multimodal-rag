@@ -1,2 +1,4 @@
 .venv/
 dataset/images/
+.env
+dataset/sample-images/
