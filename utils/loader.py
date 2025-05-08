@@ -5,21 +5,15 @@ import os
 from pathlib import Path
 from natsort import natsorted
 import pandas as pd
-import concurrent.futures
-from itertools import zip_longest
 from tqdm import tqdm
 import time
+import re
 
 print("Loading ChromaDB client...")
 client = chromadb.PersistentClient(path=str(Path(__file__).parent.parent / "db"))
 
 print("Loading dataset...")
 df = pd.read_csv("dataset/data.csv")
-description = df["description"]
-scientific_name = df["scientific_name"]
-place = df["place_state_name"]
-url = df["url"]
-image_url = df["image_url"]
 
 print("Loading CLIP model...")
 embedding_function = OpenCLIPEmbeddingFunction()
@@ -28,6 +22,7 @@ print("Loading image loader...")
 image_loader = ImageLoader()
 
 print("Loading collection...")
+
 collection = client.get_or_create_collection(
     name="philippine_flora", embedding_function=embedding_function, data_loader=image_loader,
 )
@@ -35,9 +30,21 @@ collection = client.get_or_create_collection(
 images_dir = Path("dataset") / "images"
 image_paths = natsorted([str(images_dir / image).replace("\\", "/") for image in os.listdir(images_dir)])
 
+def extract_index_from_filename(filename):
+    match = re.match(r"(\d+)-", os.path.basename(filename))
+    if match:
+        return int(match.group(1))
+    return None
 
-def add_image_to_collection(idx, image_path, metadata):
-    print(f"\nProcessing image {idx}: {image_path}")
+def add_image_to_collection(image_path, metadata):
+    idx = extract_index_from_filename(image_path)
+    if idx is None:
+        idx = "unknown"
+    
+    existing_ids = collection.get(ids=[str(idx)])
+    if existing_ids.get('ids', []):
+        return
+    
     collection.add(
         ids=[str(idx)],
         uris=[image_path],
@@ -47,29 +54,23 @@ def add_image_to_collection(idx, image_path, metadata):
 print("\nStarting image collection process...")
 start_time = time.time()
 
-batches = zip_longest(
-    range(len(image_paths)),
-    image_paths,
-    description,
-    scientific_name,
-    place,
-    url,
-    image_url,
-    fillvalue=None
-)
-
-print("\nSubmitting tasks to executor...")
-with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-    futures = []
-    for idx, image_path, desc, sci_name, place_name, img_url, url_val in tqdm(batches, total=len(image_paths), desc="Submitting tasks"):
+for image_path in tqdm(image_paths, desc="Processing images", unit="image"):
+    idx = extract_index_from_filename(image_path)
+    if idx is not None and idx < len(df):
+        row = df.iloc[idx]
         metadata = {
-            "description": desc,
-            "scientific_name": sci_name,
-            "place": place_name,
-            "url": url_val,
-            "image_url": img_url
+            "description": row.get("description", "N/A"),
+            "scientific_name": row.get("scientific_name", "N/A"),
+            "place": row.get("place_state_name", "N/A"),
+            "url": row.get("url", "N/A"),
+            "image_url": row.get("image_url", "N/A")
         }
-        future = executor.submit(add_image_to_collection, idx, image_path, metadata)
-        futures.append(future)
+        try:
+            add_image_to_collection(image_path, metadata)
+        except Exception as e:
+            print(f"Error processing image {image_path}: {e}")
+    else:
+        print(f"Warning: Could not find metadata for image {image_path}")
+
 elapsed = time.time() - start_time
 print(f"\nCollection created successfully in {elapsed:.2f} seconds")
