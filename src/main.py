@@ -4,6 +4,7 @@ from PIL import Image
 import numpy as np
 from chromadb.utils.embedding_functions import OpenCLIPEmbeddingFunction
 from chromadb.utils.data_loaders import ImageLoader
+from itertools import count
 
 print("Loading ChromaDB client...")
 client = chromadb.PersistentClient(path=str(Path(__file__).parent.parent / "db"))
@@ -28,11 +29,8 @@ result = collection.query(
     n_results=3
 )
 
-i = 0
-
-for img, metadata in zip(result['data'][0], result['metadatas'][0]):
+for i, (img, metadata) in zip(count(), zip(result['data'][0], result['metadatas'][0])):
     img = Image.fromarray(img)
     scientific_name = metadata.get('scientific_name', f'unknown_{i}')
     filename = scientific_name.lower().replace(' ', '-') + '.jpg'
     img.save(f"dataset/output-images/{i}-{filename}")
-    i += 1
