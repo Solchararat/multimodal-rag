@@ -13,21 +13,7 @@ CONCURRENT_DOWNLOADS = 10
 
 async def download_image(session, idx, row):
     image_url: str = row["image_url"]
-    parts = row["scientific_name"].split(" ")
-    if len(parts) < 2:
-        print(f"Skipping idx {idx}: invalid scientific_name '{row['scientific_name']}'")
-        return
-    if len(parts) == 3:
-        genus_name, specie_name, variation = parts[0], parts[1], parts[2]
-        scientific_name = (
-            f"{genus_name.lower()}-{specie_name.lower()}-{variation.lower()}"
-        )
-    elif len(parts) == 2:
-        genus_name, specie_name = parts[0], parts[1]
-        scientific_name = f"{genus_name.lower()}-{specie_name.lower()}"
-    else:
-        print("Invalid scientific name format")
-        return
+    scientific_name= row["scientific_name"].lower().replace(" ", "-")
     image_name: str = os.path.join("dataset", "images", f"{idx}-{scientific_name}.jpg")
     if os.path.exists(image_name):
         print(f"{image_name} already exists.")
