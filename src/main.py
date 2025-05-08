@@ -1,36 +1,38 @@
 import chromadb
-from chromadb.utils.embedding_functions import OpenCLIPEmbeddingFunction
-from chromadb.utils.data_loaders import ImageLoader
 from pathlib import Path
 from PIL import Image
 import numpy as np
+from chromadb.utils.embedding_functions import OpenCLIPEmbeddingFunction
+from chromadb.utils.data_loaders import ImageLoader
 
 print("Loading ChromaDB client...")
 client = chromadb.PersistentClient(path=str(Path(__file__).parent.parent / "db"))
+data_loader = ImageLoader()
 
-print("Loading CLIP model...")
 embedding_function = OpenCLIPEmbeddingFunction()
-
-print("Loading image loader...")
-image_loader = ImageLoader()
-
 print("Loading collection...")
-collection = client.get_or_create_collection(
-    name="philippine_flora", embedding_function=embedding_function, data_loader=image_loader,
+
+collection = client.get_collection(
+    name="philippine_flora",
+    embedding_function=embedding_function,
+    data_loader=data_loader,
 )
 
-QUERY_IMG_PATH = "dataset/sample-images/Diplaziumcordifolium1.png"
+print(collection.count())
+
+QUERY_IMG_PATH = "dataset/sample-images/1000_F_175913717_wh9WZV4aT5QAPnJ.jpg"
 
 result = collection.query(
     query_images=[np.array(Image.open(QUERY_IMG_PATH))],
-    include=["data"],
+    include=["data", "metadatas"],
     n_results=3
 )
 
-
 i = 0
 
-for img in result['data'][0]:
+for img, metadata in zip(result['data'][0], result['metadatas'][0]):
     img = Image.fromarray(img)
-    img.save(f"dataset/output-images/{i}.jpg")
+    scientific_name = metadata.get('scientific_name', f'unknown_{i}')
+    filename = scientific_name.lower().replace(' ', '-') + '.jpg'
+    img.save(f"dataset/output-images/{i}-{filename}")
     i += 1
