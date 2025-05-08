@@ -1,4 +1,11 @@
 .venv/
-dataset/images/
 .env
+
+# dataset
+dataset/images/
 dataset/sample-images/
+dataset/output-images/
+
+# db
+db/chroma.sqlite3
+db/*/*
