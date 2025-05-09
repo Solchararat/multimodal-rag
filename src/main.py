@@ -7,49 +7,20 @@ from chromadb.utils.data_loaders import ImageLoader
 from itertools import count
 from dotenv import load_dotenv
 from google.genai import Client
-from google.genai.types import  GoogleSearch, Tool, HarmCategory, HarmBlockThreshold, Part, Content, GenerateContentConfig, CreateCachedContentConfig
+from google.genai.types import  GoogleSearch, Tool, HarmCategory, HarmBlockThreshold, Part, Content, GenerateContentConfig, SafetySetting
 from os import getenv
-import urllib.parse as urlparse
+import urllib.parse
 import requests
 from io import BytesIO
 from typing import Union
 import json
-
-
 load_dotenv()
 
 MODEL_ID = "gemini-2.5-flash-preview-04-17"
 
-print("Loading ChromaDB client...")
-client = chromadb.PersistentClient(path=str(Path(__file__).parent.parent / "db"))
-data_loader = ImageLoader()
-
-embedding_function = OpenCLIPEmbeddingFunction()
-print("Loading collection...")
-
-collection = client.get_collection(
-    name="philippine_flora",
-    embedding_function=embedding_function,
-    data_loader=data_loader,
-)
-
-QUERY_IMG_PATH = "dataset/sample-images/1000_F_175913717_wh9WZV4aT5QAPnJ.jpg"
-
-result = collection.query(
-    query_images=[np.array(Image.open(QUERY_IMG_PATH))],
-    include=["data", "metadatas"],
-    n_results=3
-)
-
-for i, (img, metadata) in zip(count(), zip(result['data'][0], result['metadatas'][0])):
-    img = Image.fromarray(img)
-    scientific_name = metadata.get('scientific_name', f'unknown_{i}')
-    filename = scientific_name.lower().replace(' ', '-') + '.jpg'
-    img.save(f"dataset/output-images/{i}-{filename}")
-
 def is_url(string: str) -> bool: 
     try:
-        result = urlparse(string)
+        result = urllib.parse.urlparse(string)
         return all([result.scheme, result.netloc])
     except ValueError:
         return False    
@@ -73,16 +44,16 @@ def load_image(image_input: str | Image.Image | np.ndarray) -> tuple[Image.Image
         img = image_input
         img_array = np.array(img)    
         buffer = BytesIO()
-        img.save(buffer, format="jpg")
+        img.save(buffer, format="JPEG")
         buffer.seek(0)
-        img_bytes = buffer.get_value()
+        img_bytes = buffer.getvalue()
     elif isinstance(image_input, np.ndarray):
         img = Image.fromarray(image_input)
         img_array = image_input
         buffer = BytesIO()
-        img.save(buffer, format="jpg")
+        img.save(buffer, format="JPEG")
         buffer.seek(0)
-        img_bytes = buffer.get_value()
+        img_bytes = buffer.getvalue()
 
     return img, img_bytes, img_array
 class PlantClassifier:
@@ -110,14 +81,28 @@ class PlantClassifier:
         self.model = MODEL_ID
         self.tools = [Tool(google_search=GoogleSearch()),]
         
-        self.safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_SEXUAL: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_VIOLENCE: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_SELF_HARM: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        }
-
+        self.safety_settings = [
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+                threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH
+            )
+        ]
         
         self.prompt = """
         You are a botanical expert specializing in Philippine flora. Your task is to classify the plant in the query image.
@@ -137,7 +122,7 @@ class PlantClassifier:
         - Suggest it's a different species if the characteristics don't match
         - Provide confidence level in your classification
         
-        Return a JSON object with the following fields:
+        Strictly return a JSON object with the following fields:
         {
             "classification": {
                 "scientific_name": "Latin name", 
@@ -149,16 +134,6 @@ class PlantClassifier:
             "reasoning": "Brief explanation of key identifying features"
         }
         """
-        
-        self.cache = self.gemini_client.caches.create(
-            model=self.model,
-            config=CreateCachedContentConfig(
-                display_name="Plant Classifier",
-                tools=self.tools,
-                system_instruction=self.prompt,
-            )
-        )
-        
         
     def retrieve_similar_images(self, query_image_input: str | Image.Image | np.ndarray, n_results: int = 5) -> tuple[list[dict[str, Union[Image.Image, dict[str, str]]]], np.ndarray]:
         _, _, query_img_array = load_image(query_image_input)
@@ -200,41 +175,43 @@ class PlantClassifier:
             example_metadata.append(item["metadata"])
 
         contents = [
-            Part.text("\nQUERY IMAGE TO CLASSIFY:"),
-            Part.from_bytes(data=query_img_bytes, mime_type="image/jpg")
+            Part.from_text(text=self.prompt),
+            Part.from_text(text="\nQUERY IMAGE TO CLASSIFY:"),
+            Part.from_bytes(data=query_img_bytes, mime_type="image/jpeg")
         ]
         
         for idx, img_bytes, metadata in zip(count(), example_img_bytes, example_metadata):
             contents.extend(
                 [
-                    Part.text(f"\nREFERENCE IMAGE {idx + 1}:"),
-                    Part.from_bytes(data=img_bytes, mime_type="image/jpg"),
-                    Part.text(f"\nMETADATA: {json.dumps(metadata, indent=2)}")
+                    Part.from_text(text=f"\nREFERENCE IMAGE {idx + 1}:"),
+                    Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                    Part.from_text(text=f"\nMETADATA: {json.dumps(metadata, indent=2)}")
                 ]
             )
         
-        response = self.gemini_client.generate_content(
-            model=self.model,
-            contents=Content(parts=contents),
-            config=GenerateContentConfig(
-                cached_content=self.cache,
-                safety_settings=self.safety_settings,
-            )
-        )
-        
         try:
-            response_text = response.text
-            json_start = response_text.find("{")
-            json_end = response_text.rfind("}")
-            
-            if json_start >= 0 and json_end > json_start:
-                json_response = response_text[json_start:json_end]
-                return json.loads(json_response)
-            else:
-                return {"raw_response": response_text}
+            response = self.gemini_client.models.generate_content(
+                model=self.model,
+                contents=Content(parts=contents),
+                config=GenerateContentConfig(
+                    tools=self.tools,
+                    safety_settings=self.safety_settings,
+                )
+            )
+            text = response.text.strip()
+            try:
+                if text.startswith("```"):
+                    text = text.strip("` \n")
+                    if text.lower().startswith("json"):
+                        text = text[4:].lstrip("\n")
+                parsed = json.loads(text)
+                return parsed
+            except Exception as parse_err:
+                print(f"Failed to parse Gemini response as JSON: {parse_err}\nRaw response: {text}")
+                return {"error": f"Failed to parse Gemini response as JSON: {parse_err}", "raw_response": text}
         except Exception as e:
             print(f"Error processing response: {e}")
-            return {"error": str(e), "raw_response": response.text}
+            return {"error": str(e)}
 
     def classify_plant(self, query_image: str | Image.Image | np.ndarray, save_results: bool = True, output_dir : str = "dataset/output-images"):
 
@@ -261,5 +238,13 @@ class PlantClassifier:
         return result, similar_images
 
 if __name__ == "__main__":
-    plant_classifier = PlantClassifier()
+    db_path = Path(__file__).parent.parent / "db"
     
+    plant_classifier = PlantClassifier(db_path=db_path)
+    
+    # testing local image
+    print("\n=== Testing with local image ===")
+    local_image_path = "dataset/sample-images/1000_F_175913717_wh9WZV4aT5QAPnJ.jpg"
+    result_local, similar_local = plant_classifier.classify_plant(local_image_path)
+    print("Classification from local file:")
+    print(json.dumps(result_local, indent=2))
