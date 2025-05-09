@@ -7,11 +7,9 @@ from chromadb.utils.data_loaders import ImageLoader
 from itertools import count
 from dotenv import load_dotenv
 from google.genai import Client
-from google.genai.types import GenerateContentConfig, GoogleSearch, Tool, HarmCategory, HarmBlockThreshold
+from google.genai.types import  GoogleSearch, Tool, HarmCategory, HarmBlockThreshold
 from os import getenv
-import base64
-from io import BytesIO
-
+import urllib.parse as urlparse
 load_dotenv()
 
 MODEL_ID = "gemini-2.5-flash-preview-04-17"
@@ -42,6 +40,13 @@ for i, (img, metadata) in zip(count(), zip(result['data'][0], result['metadatas'
     scientific_name = metadata.get('scientific_name', f'unknown_{i}')
     filename = scientific_name.lower().replace(' ', '-') + '.jpg'
     img.save(f"dataset/output-images/{i}-{filename}")
+
+def is_url(string: str) -> bool: 
+    try:
+        result = urlparse(string)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False    
 
 
 class PlantClassifier:
