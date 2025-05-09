@@ -9,3 +9,5 @@ dataset/output-images/
 # db
 db/chroma.sqlite3
 db/*/*
+
+src/__pycache__/
