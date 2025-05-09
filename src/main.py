@@ -10,6 +10,8 @@ from google.genai import Client
 from google.genai.types import  GoogleSearch, Tool, HarmCategory, HarmBlockThreshold
 from os import getenv
 import urllib.parse as urlparse
+import requests
+from io import BytesIO
 load_dotenv()
 
 MODEL_ID = "gemini-2.5-flash-preview-04-17"
@@ -48,7 +50,18 @@ def is_url(string: str) -> bool:
     except ValueError:
         return False    
 
-
+def load_image_from_path_or_url(image_path_or_url: str) -> tuple[Image.Image, bytes]:
+    if is_url(image_path_or_url):
+        response = requests.get(image_path_or_url, stream=True)
+        response.raise_for_status()
+        image = Image.open(BytesIO(response.content))
+        img_bytes = response.content
+    else:
+        image = Image.open(image_path_or_url)
+        with open(image_path_or_url, "rb") as f:
+            img_bytes = f.read()
+    
+    return image, img_bytes
 class PlantClassifier:
     def __init__(self, db_path: str, collection_name: str ="philippine_flora"):
         print("Loading ChromaDB client...")
