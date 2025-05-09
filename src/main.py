@@ -234,7 +234,31 @@ class PlantClassifier:
                 return {"raw_response": response_text}
         except Exception as e:
             print(f"Error processing response: {e}")
-            return {"error": str(e), "raw_response": response.text}        
+            return {"error": str(e), "raw_response": response.text}
+
+    def classify_plant(self, query_image: str | Image.Image | np.ndarray, save_results: bool = True, output_dir : str = "dataset/output-images"):
+
+        if save_results:
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        similar_images, query_img_array = self.retrieve_similar_images(query_image)
+        result = self.classify_with_gemini(query_img_array, similar_images)
+        
+        if save_results:
+            pil_img, _, _ = load_image(query_image)
+            pil_img.save(f"{output_dir}/query_image.jpg")
+            
+            for idx, item in zip(count(), similar_images):
+                img = item["image"]
+                metadata = item["metadata"]
+                scientific_name = metadata.get("scientific_name", f"unknown_{idx}")
+                filename = scientific_name.lower().replace(" ", "-") + ".jpg"
+                img.save(f"{output_dir}/{idx}-{filename}")
+
+            with open(f"{output_dir}/result.json", "w") as f:
+                json.dump(result, f, indent=2)
+        
+        return result, similar_images
 
 if __name__ == "__main__":
     plant_classifier = PlantClassifier()
