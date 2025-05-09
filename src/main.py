@@ -5,6 +5,16 @@ import numpy as np
 from chromadb.utils.embedding_functions import OpenCLIPEmbeddingFunction
 from chromadb.utils.data_loaders import ImageLoader
 from itertools import count
+from dotenv import load_dotenv
+from google.genai import Client
+from google.genai.types import GenerateContentConfig, GoogleSearch, Tool, HarmCategory, HarmBlockThreshold
+from os import getenv
+import base64
+from io import BytesIO
+
+load_dotenv()
+
+MODEL_ID = "gemini-2.5-flash-preview-04-17"
 
 print("Loading ChromaDB client...")
 client = chromadb.PersistentClient(path=str(Path(__file__).parent.parent / "db"))
@@ -19,8 +29,6 @@ collection = client.get_collection(
     data_loader=data_loader,
 )
 
-print(collection.count())
-
 QUERY_IMG_PATH = "dataset/sample-images/1000_F_175913717_wh9WZV4aT5QAPnJ.jpg"
 
 result = collection.query(
@@ -34,3 +42,41 @@ for i, (img, metadata) in zip(count(), zip(result['data'][0], result['metadatas'
     scientific_name = metadata.get('scientific_name', f'unknown_{i}')
     filename = scientific_name.lower().replace(' ', '-') + '.jpg'
     img.save(f"dataset/output-images/{i}-{filename}")
+
+
+class PlantClassifier:
+    def __init__(self, db_path: str, collection_name: str ="philippine_flora"):
+        print("Loading ChromaDB client...")
+        self.client = chromadb.PersistentClient(path=str(Path(db_path)))
+
+        print("Loading image loader...")
+        self.data_loader = ImageLoader()
+
+        print("Loading CLIP model...")
+        self.embedding_function = OpenCLIPEmbeddingFunction()
+
+        print("Loading collection...")
+        self.collection = self.client.get_collection(
+            name=collection_name,
+            embedding_function=self.embedding_function,
+            data_loader=self.data_loader,
+        )
+        
+        self.gemini_client = Client(
+            api_key=getenv("GEMINI_API_KEY")
+        )
+        
+        self.model = MODEL_ID
+        self.tools = [Tool(google_search=GoogleSearch()),]
+        
+        self.safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUAL: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_VIOLENCE: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SELF_HARM: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        }
+
+if __name__ == "__main__":
+    plant_classifier = PlantClassifier()
+    
