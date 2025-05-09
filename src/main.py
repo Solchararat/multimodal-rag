@@ -7,12 +7,15 @@ from chromadb.utils.data_loaders import ImageLoader
 from itertools import count
 from dotenv import load_dotenv
 from google.genai import Client
-from google.genai.types import  GoogleSearch, Tool, HarmCategory, HarmBlockThreshold
+from google.genai.types import  GoogleSearch, Tool, HarmCategory, HarmBlockThreshold, Part, Content, GenerateContentConfig, CreateCachedContentConfig
 from os import getenv
 import urllib.parse as urlparse
 import requests
 from io import BytesIO
 from typing import Union
+import json
+
+
 load_dotenv()
 
 MODEL_ID = "gemini-2.5-flash-preview-04-17"
@@ -115,6 +118,48 @@ class PlantClassifier:
             HarmCategory.HARM_CATEGORY_SELF_HARM: HarmBlockThreshold.BLOCK_ONLY_HIGH,
         }
 
+        
+        self.prompt = """
+        You are a botanical expert specializing in Philippine flora. Your task is to classify the plant in the query image.
+        
+        I'll provide you with:
+        1. A query image to classify
+        2. Several similar reference images with their metadata from our database
+        
+        Analyze the query image and compare it with the reference examples. Consider:
+        - Leaf shape, arrangement, and structure
+        - Flower characteristics if visible
+        - Overall plant morphology
+        - Any distinctive features
+        
+        Based on this analysis, determine which plant species the query image shows. You can:
+        - Confirm it matches one of the reference examples
+        - Suggest it's a different species if the characteristics don't match
+        - Provide confidence level in your classification
+        
+        Return a JSON object with the following fields:
+        {
+            "classification": {
+                "scientific_name": "Latin name", 
+                "common_name": "Common name", 
+                "family": "Plant family"
+            },
+            "confidence": 0-100,
+            "matched_reference": index of the matched reference or null,
+            "reasoning": "Brief explanation of key identifying features"
+        }
+        """
+        
+        self.cache = self.gemini_client.caches.create(
+            model=self.model,
+            config=CreateCachedContentConfig(
+                display_name="Plant Classifier",
+                tools=self.tools,
+                system_instruction=self.prompt,
+            )
+        )
+        
+        
     def retrieve_similar_images(self, query_image_input: str | Image.Image | np.ndarray, n_results: int = 5) -> tuple[list[dict[str, Union[Image.Image, dict[str, str]]]], np.ndarray]:
         _, _, query_img_array = load_image(query_image_input)
 
@@ -136,8 +181,60 @@ class PlantClassifier:
                     "metadata": metadata
                 }
             )
-
         return images, query_img_array
+
+    def classify_with_gemini(self, query_image: str | Image.Image | np.ndarray, similar_images: list[dict[str, Union[Image.Image, dict[str, str]]]]):
+        if not isinstance(query_image, bytes):
+            _, query_img_bytes, _ = load_image(query_image)
+        else:
+            query_img_bytes = query_image
+        
+        example_img_bytes = []
+        example_metadata = []
+        
+        similar_images_iter = iter(similar_images)
+        
+        for item in similar_images_iter:
+            _, img_bytes, _ = load_image(item["image"])
+            example_img_bytes.append(img_bytes)
+            example_metadata.append(item["metadata"])
+
+        contents = [
+            Part.text("\nQUERY IMAGE TO CLASSIFY:"),
+            Part.from_bytes(data=query_img_bytes, mime_type="image/jpg")
+        ]
+        
+        for idx, img_bytes, metadata in zip(count(), example_img_bytes, example_metadata):
+            contents.extend(
+                [
+                    Part.text(f"\nREFERENCE IMAGE {idx + 1}:"),
+                    Part.from_bytes(data=img_bytes, mime_type="image/jpg"),
+                    Part.text(f"\nMETADATA: {json.dumps(metadata, indent=2)}")
+                ]
+            )
+        
+        response = self.gemini_client.generate_content(
+            model=self.model,
+            contents=Content(parts=contents),
+            config=GenerateContentConfig(
+                cached_content=self.cache,
+                safety_settings=self.safety_settings,
+            )
+        )
+        
+        try:
+            response_text = response.text
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}")
+            
+            if json_start >= 0 and json_end > json_start:
+                json_response = response_text[json_start:json_end]
+                return json.loads(json_response)
+            else:
+                return {"raw_response": response_text}
+        except Exception as e:
+            print(f"Error processing response: {e}")
+            return {"error": str(e), "raw_response": response.text}        
 
 if __name__ == "__main__":
     plant_classifier = PlantClassifier()
