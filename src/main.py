@@ -12,6 +12,7 @@ from os import getenv
 import urllib.parse as urlparse
 import requests
 from io import BytesIO
+from typing import Union
 load_dotenv()
 
 MODEL_ID = "gemini-2.5-flash-preview-04-17"
@@ -50,18 +51,37 @@ def is_url(string: str) -> bool:
     except ValueError:
         return False    
 
-def load_image_from_path_or_url(image_path_or_url: str) -> tuple[Image.Image, bytes]:
-    if is_url(image_path_or_url):
-        response = requests.get(image_path_or_url, stream=True)
-        response.raise_for_status()
-        image = Image.open(BytesIO(response.content))
-        img_bytes = response.content
-    else:
-        image = Image.open(image_path_or_url)
-        with open(image_path_or_url, "rb") as f:
-            img_bytes = f.read()
+def load_image(image_input: str | Image.Image | np.ndarray) -> tuple[Image.Image, bytes]:
+    img_bytes: bytes | None = None
     
-    return image, img_bytes
+    if isinstance(image_input, str):
+        if is_url(image_input):
+            response = requests.get(image_input, stream=True)
+            response.raise_for_status()
+            img = Image.open(BytesIO(response.content))
+            img_bytes = response.content
+            img_array = np.array(img)
+        else: # local file path
+            img = Image.open(image_input)
+            img_array = np.array(img)
+            with open(image_input, "rb") as f:
+                img_bytes = f.read()
+    elif isinstance(image_input, Image.Image):
+        img = image_input
+        img_array = np.array(img)    
+        buffer = BytesIO()
+        img.save(buffer, format="jpg")
+        buffer.seek(0)
+        img_bytes = buffer.get_value()
+    elif isinstance(image_input, np.ndarray):
+        img = Image.fromarray(image_input)
+        img_array = image_input
+        buffer = BytesIO()
+        img.save(buffer, format="jpg")
+        buffer.seek(0)
+        img_bytes = buffer.get_value()
+
+    return img, img_bytes, img_array
 class PlantClassifier:
     def __init__(self, db_path: str, collection_name: str ="philippine_flora"):
         print("Loading ChromaDB client...")
@@ -94,6 +114,30 @@ class PlantClassifier:
             HarmCategory.HARM_CATEGORY_VIOLENCE: HarmBlockThreshold.BLOCK_ONLY_HIGH,
             HarmCategory.HARM_CATEGORY_SELF_HARM: HarmBlockThreshold.BLOCK_ONLY_HIGH,
         }
+
+    def retrieve_similar_images(self, query_image_input: str | Image.Image | np.ndarray, n_results: int = 5) -> tuple[list[dict[str, Union[Image.Image, dict[str, str]]]], np.ndarray]:
+        _, _, query_img_array = load_image(query_image_input)
+
+        result = self.collection.query(
+            query_images=[query_img_array],
+            include=["data", "metadatas"],
+            n_results=n_results
+        )
+
+        images = []
+        metadatas = result["metadatas"][0]
+        data = result["data"][0]
+        
+        for img, metadata in zip(data, metadatas):
+            pil_img = Image.fromarray(img)
+            images.append(
+                {
+                    "image": pil_img,
+                    "metadata": metadata
+                }
+            )
+
+        return images, query_img_array
 
 if __name__ == "__main__":
     plant_classifier = PlantClassifier()
