@@ -8,3 +8,4 @@ chromadb
 python-dotenv
 open-clip-torch
 natsort
+"fastapi[standard]"
