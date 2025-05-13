@@ -26,7 +26,7 @@ async def classify_plant(request: ImageRequest):
         image_bytes = base64.b64decode(request.image)
         image = Image.open(BytesIO(image_bytes))
         
-        result, _ = app.state.plant_classifier.classify_plant(image)
+        result, _ = app.state.plant_classifier.classify_plant(image, save_results=False)
         return JSONResponse(content=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
