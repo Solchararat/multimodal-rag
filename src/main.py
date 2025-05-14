@@ -1,4 +1,4 @@
-from plant_classifier import PlantClassifier
+from src.plant_classifier import PlantClassifier
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
