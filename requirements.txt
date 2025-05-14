@@ -4,8 +4,9 @@ numpy
 requests
 google-genai
 pillow
+pysqlite3-binary
 chromadb
 python-dotenv
 open-clip-torch
 natsort
-"fastapi[standard]"
+fastapi[standard]
