@@ -51,4 +51,8 @@ ENV PYTHONPATH=/app \
 
 EXPOSE 8080
 
+RUN ls -la /app && \
+    ls -la /app/db || echo "No db directory" && \
+    find /app -name "*.sqlite3*" || echo "No SQLite files found"
+
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
