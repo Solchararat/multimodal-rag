@@ -18,14 +18,13 @@ This solution is designed to support applications like BotaniCatch, an education
 
 User Image + Query
        ↓
-   Image Encoder
+  Image Encoder
        ↓
- Text/Vector Embedding ↘
-                        → ChromaDB (Vector Store)
-       ↑               ↗
-  RAG Retriever (FAISS / Chroma) 
+ChromaDB (Vector Store)
        ↓
-     Gemini API (RAG Output: Grounded Answer)
+ Vector Embedding
+       ↓
+Gemini API (RAG Output: Grounded Answer)
 
 ## 📊 Dataset
 
@@ -43,44 +42,27 @@ User Image + Query
 ## 📱 Technologies Used
 
 | Category        | Tools/Frameworks                          |
-|----------------|--------------------------------------------|
-| Language        | Python                                     |
-| Data Handling   | Pandas, NumPy, OpenCV, PIL                 |
-| ML/DL Framework | PyTorch / TensorFlow                      |
-| Embeddings      | CLIP / BLIP (Image + Text)                |
-| Vector DB       | ChromaDB or FAISS                         |
+|-----------------|-------------------------------------------|
+| Language        | Python                                    |
+| Data Handling   | Pandas, NumPy, OpenCV, PIL                |
+| ML/DL Framework | PyTorch                                   |
+| Embeddings      | CLIP                                      |
+| Vector DB       | ChromaDB                                  |
 | LLM             | Gemini API                                |
-| Environment     | Google Colab                              |
-| Deployment      | Google Cloud Functions (for API calls)    |
+| Deployment      | Google Cloud Run (for API calls)          |
 
-## 🏃 Training & Running
+## 🏃 Running
 
 ### ⚒️ Setup
 
 pip install -r requirements.txt
 
-### Example Run
-
-```python
-from rag_pipeline import run_rag
-
-query = "What is this plant with oval leaves and yellow flowers?"
-image_path = "samples/plant_01.jpg"
-
-response = run_rag(image_path, query)
-print(response)
-```
-
-## 📊 Evaluation Metrics
-
-- Top-k Retrieval Accuracy: Measures if the ground-truth plant appears in the top results.
-- Answer Grounding Score: Subjectively rates how factual the Gemini-generated answers are.
-- BLEU/ROUGE: For text overlap with reference descriptions.
+Run the `downloader.py` to download the plant images to embed
+Run the `loader.py` to embed the plant images to the ChromaDB vector store
 
 ## 👯 Use Cases
 
 - Educational plant ID assistant.
-- Citizen science tools.
 - Smart botany guides in mobile applications.
 - Herbarium digitization and classification systems.
 
@@ -88,7 +70,6 @@ print(response)
 
 - Add multilingual support for plant names.
 - Integrate feedback loop for retraining embeddings.
-- Explore lightweight local models for offline RAG inference.
 
 ## 👷👷 Contributors
 
