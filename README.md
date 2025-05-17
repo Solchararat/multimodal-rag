@@ -16,15 +16,15 @@ This solution is designed to support applications like BotaniCatch, an education
 
 ## ⚙️ Architecture
 
-   User Image
-       ↓
-  Image Decoder
-       ↓
-ChromaDB (Vector Store)
-       ↓
- Vector Embedding
-       ↓
-Gemini API (RAG Output: Grounded Answer)
+   User Image\
+   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓\
+  Image Decoder\
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓\
+ChromaDB (Vector Store)\
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓\
+ Vector Embedding\
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓\
+Gemini API (RAG Output: Grounded Answer)\
 
 ## 📊 Dataset
 
