@@ -16,9 +16,9 @@ This solution is designed to support applications like BotaniCatch, an education
 
 ## ⚙️ Architecture
 
-User Image + Query
+   User Image
        ↓
-  Image Encoder
+  Image Decoder
        ↓
 ChromaDB (Vector Store)
        ↓
@@ -44,7 +44,7 @@ Gemini API (RAG Output: Grounded Answer)
 | Category        | Tools/Frameworks                          |
 |-----------------|-------------------------------------------|
 | Language        | Python                                    |
-| Data Handling   | Pandas, NumPy, OpenCV, PIL                |
+| Data Handling   | Pandas, NumPy, PIL                        |
 | ML/DL Framework | PyTorch                                   |
 | Embeddings      | CLIP                                      |
 | Vector DB       | ChromaDB                                  |
